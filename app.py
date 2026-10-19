@@ -312,4 +312,25 @@ elif opcion == "✏️ Editar / Borrar":
     elif sub_opcion == "Corregir Adeudo":
         df_adeudos = pd.read_sql("SELECT * FROM adeudos", conn)
         if not df_adeudos.empty:
-            adeudo_id = st.selectbox("Selecciona Registro a Corregir", df_adeudos['id'].tolist(), format_func
+            adeudo_id = st.selectbox("Selecciona Registro a Corregir", df_adeudos['id'].tolist(), format_func=lambda x: f"ID {x} - {df_adeudos[df_adeudos['id']==x]['cliente'].values[0]} (${df_adeudos[df_adeudos['id']==x]['saldo_pendiente'].values[0]})")
+            ad_row = df_adeudos[df_adeudos['id'] == adeudo_id].iloc[0]
+            
+            with st.form("edit_adeudo"):
+                st.info("Solo se permite editar el nombre, concepto y estado.")
+                e_cliente = st.text_input("Nombre del Cliente", value=ad_row['cliente'])
+                e_concepto = st.text_input("Concepto / Detalles", value=ad_row['concepto'])
+                e_estado = st.selectbox("Estado de la Deuda", ["PENDIENTE", "PAGADO"], index=0 if ad_row['estado'] == "PENDIENTE" else 1)
+                
+                if st.form_submit_button("Guardar Corrección"):
+                    c.execute("UPDATE adeudos SET cliente=?, concepto=?, estado=? WHERE id=?", (e_cliente, e_concepto, e_estado, adeudo_id))
+                    conn.commit()
+                    st.success("Deuda corregida correctamente.")
+                    st.rerun()
+                    
+            if st.button("❌ Eliminar Registro de Deuda"):
+                c.execute("DELETE FROM adeudos WHERE id=?", (adeudo_id,))
+                conn.commit()
+                st.warning("Registro eliminado.")
+                st.rerun()
+        else:
+            st.info("No hay adeudos para editar.")
