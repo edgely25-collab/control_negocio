@@ -154,7 +154,7 @@ elif opcion == "💳 Cuentas por Cobrar":
         st.divider()
         st.subheader("Registrar Abono")
         adeudo_sel = st.selectbox("Selecciona el Cliente / Folio", df_adeudos['ID'].tolist(), format_func=lambda x: f"ID {x} - {df_adeudos[df_adeudos['ID']==x]['Cliente'].values[0]} (${df_adeudos[df_adeudos['ID']==x]['Saldo Pendiente ($)'].values[0]})")
-        monto_abono = st.number_input("Monto a Abonar ($)", min_value=1.0, step=10.0)
+        monto_abono = st.number_input("Monto a Abonar ($)", min_value=0.1, step=10.0)
         
         if st.button("Registrar Abono"):
             saldo_act = df_adeudos[df_adeudos['ID']==adeudo_sel]['Saldo Pendiente ($)'].values[0]
@@ -210,7 +210,7 @@ elif opcion == "➕ Nuevo Registro":
             else:
                 st.warning("No hay productos con stock disponible para descontar.")
                 descontar_stock = False
-                monto_sugerido_total = 100.0
+                monto_sugerido_total = 0.0
         else:
             monto_sugerido_total = 100.0
 
@@ -223,7 +223,7 @@ elif opcion == "➕ Nuevo Registro":
             else:
                 concepto = st.text_input("Concepto / Detalles del trabajo")
                 
-            monto = st.number_input("Monto Total ($)", min_value=1.0, value=float(monto_sugerido_total))
+            monto = st.number_input("Monto Total ($)", min_value=0.0, value=float(monto_sugerido_total))
             
             if st.form_submit_button("Guardar Adeudo"):
                 if cliente:
