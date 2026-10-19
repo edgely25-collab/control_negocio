@@ -286,8 +286,16 @@ if page == "✨ Inicio":
     a,b = st.columns(2)
     with a:
         st.subheader("⚠️ Existencias bajas")
-        low = df_query("""SELECT name AS Producto, stock AS Stock, min_stock AS 'Mínimo'
-                          FROM products WHERE active=TRUE AND stock<=min_stock ORDER BY stock,name""")
+        
+low = df_query("""SELECT
+    name AS "Producto",
+    stock AS "Stock",
+    min_stock AS "Mínimo"
+FROM products
+WHERE active = TRUE
+  AND stock <= min_stock
+ORDER BY stock, name""")
+
         if low.empty:
             st.success("No hay productos debajo del stock mínimo.")
         else:
