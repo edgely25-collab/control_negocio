@@ -295,8 +295,7 @@ FROM products
 WHERE active = TRUE
   AND stock <= min_stock
 ORDER BY stock, name""")
-
-        if low.empty:
+if low.empty:
             st.success("No hay productos debajo del stock mínimo.")
         else:
             st.dataframe(low, use_container_width=True, hide_index=True)
