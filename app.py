@@ -15,7 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 # Configuración
 # ---------------------------------------------------------------------
 st.set_page_config(
-    page_title="BenyFerch | Gestión",
+    page_title="BeniFerch | Gestión",
     page_icon="💎",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -286,28 +286,20 @@ if page == "✨ Inicio":
     a,b = st.columns(2)
     with a:
         st.subheader("⚠️ Existencias bajas")
-        
-low = df_query("""SELECT
-    name AS "Producto",
-    stock AS "Stock",
-    min_stock AS "Mínimo"
-FROM products
-WHERE active = TRUE
-  AND stock <= min_stock
-ORDER BY stock, name""")
-
-if low.empty:
+        low = df_query("""SELECT name AS Producto, stock AS Stock, min_stock AS "Mínimo"
+                          FROM products WHERE active=TRUE AND stock<=min_stock ORDER BY stock,name""")
+        if low.empty:
             st.success("No hay productos debajo del stock mínimo.")
-else:
+        else:
             st.dataframe(low, use_container_width=True, hide_index=True)
-with b:
+    with b:
         st.subheader("🧾 Ventas recientes")
         recent = df_query("""SELECT folio AS Folio, customer_name AS Cliente, sale_date AS Fecha,
                              total AS Total, balance AS Saldo, status AS Estado
                              FROM sales ORDER BY id DESC LIMIT 8""")
-if recent.empty:
+        if recent.empty:
             st.info("Todavía no hay ventas registradas.")
-else:
+        else:
             st.dataframe(recent, use_container_width=True, hide_index=True)
 
 # ---------------------------------------------------------------------
@@ -587,7 +579,7 @@ elif page == "📊 Reportes":
             st.info("No hay ventas en el periodo seleccionado.")
         movements = df_query("""SELECT sm.created_at AS Fecha, p.name AS Producto,
                                        sm.movement_type AS Movimiento, sm.quantity AS Cantidad,
-                                       sm.stock_before AS 'Antes', sm.stock_after AS 'Después',
+                                       sm.stock_before AS "Antes", sm.stock_after AS "Después",
                                        sm.reason AS Motivo
                                 FROM stock_movements sm JOIN products p ON p.id=sm.product_id
                                 WHERE DATE(sm.created_at)>=:start AND DATE(sm.created_at)<=:end
@@ -651,4 +643,4 @@ elif page == "⚙️ Administración":
         except Exception:
             st.caption(f"No se pudo preparar la exportación de {table_name}.")
 
-st.caption("BenyFerch · Gestión de joyería y accesorios")
+st.caption("BeniFerch · Gestión de joyería y accesorios")
