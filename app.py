@@ -256,10 +256,12 @@ def create_sale(customer_name, customer_id, cart, discount, payment_amount, paym
 PAGES = {
     "✨ Inicio": ("Inicio", "Resumen del negocio"),
     "🛍️ Nueva venta": ("Nueva venta", "Cobra productos y registra pagos"),
-    "💎 Productos": ("Inventario", "Consulta y agrega productos"),
+    "➕ Nuevo producto": ("Nuevo producto", "Registra una joya o accesorio"),
+    "💎 Productos": ("Inventario", "Consulta existencias y precios"),
     "📥 Entrada de stock": ("Entrada de stock", "Registra mercancía recibida"),
     "👥 Clientes": ("Clientes", "Administra tus clientes"),
-    "💳 Cuentas por cobrar": ("Cuentas por cobrar", "Consulta saldos y registra abonos"),
+    "💳 Cuentas por cobrar": ("Cuentas por cobrar", "Consulta los saldos pendientes"),
+    "💵 Registrar abono": ("Registrar abono", "Registra un pago de una cuenta pendiente"),
     "📊 Reportes": ("Reportes", "Ventas y movimientos de inventario"),
     "⚙️ Administración": ("Administración", "Edita productos y exporta datos"),
 }
@@ -278,10 +280,12 @@ if page == "✨ Inicio":
     st.markdown("<div style='text-align:center;color:#c9c2b1;margin-bottom:18px'>¿Qué deseas hacer hoy?</div>", unsafe_allow_html=True)
     tile_data = [
         ("🛍️ Nueva venta", "🛍️", "Cobrar una venta"),
-        ("💎 Productos", "💎", "Ver o agregar inventario"),
+        ("➕ Nuevo producto", "➕", "Dar de alta un producto"),
+        ("💎 Productos", "💎", "Consultar inventario"),
         ("📥 Entrada de stock", "📦", "Agregar existencias"),
         ("👥 Clientes", "👥", "Directorio de clientes"),
-        ("💳 Cuentas por cobrar", "💳", "Saldos y abonos"),
+        ("💳 Cuentas por cobrar", "💳", "Ver saldos pendientes"),
+        ("💵 Registrar abono", "💵", "Capturar un pago o abono"),
         ("📊 Reportes", "📊", "Consultar resultados"),
         ("⚙️ Administración", "⚙️", "Ajustes y exportaciones"),
     ]
@@ -351,7 +355,7 @@ if page == "✨ Inicio":
         else:
             st.dataframe(recent, use_container_width=True, hide_index=True)
 
-elif page == "💎 Productos":
+elif page == "➕ Nuevo producto":
     st.subheader("➕ Registrar nuevo producto")
     st.caption("Completa los datos y pulsa Guardar producto. Los campos están acomodados en vertical para facilitar el uso desde celular.")
     with st.form("new_product", clear_on_submit=True):
@@ -395,7 +399,8 @@ elif page == "💎 Productos":
                 st.error("No se pudo guardar el producto. Revisa los datos y que el código SKU no esté repetido.")
                 st.caption(str(e))
 
-    st.divider()
+
+elif page == "💎 Productos":
     st.subheader("💎 Inventario de productos")
     query = st.text_input("Buscar producto por nombre, código o material", key="product_search")
     df = get_products(active_only=False)
@@ -411,7 +416,7 @@ elif page == "💎 Productos":
         st.dataframe(view[["Código","Producto","Categoría","Material","Costo","Precio venta","Stock","Stock mínimo"]],
                      use_container_width=True, hide_index=True)
     else:
-        st.info("Aún no hay productos registrados. Usa el formulario de arriba para agregar el primero.")
+        st.info("Aún no hay productos registrados. Entra en «Nuevo producto» desde el inicio para agregar el primero.")
 
 # Nueva venta
 # ---------------------------------------------------------------------
@@ -550,24 +555,44 @@ elif page == "💳 Cuentas por cobrar":
     df = df_query("""SELECT id, folio, customer_name AS cliente, sale_date AS fecha,
                             total, paid_total AS abonado, balance AS saldo, status AS estado
                      FROM sales WHERE balance > 0 ORDER BY sale_date""")
+    st.subheader("Cuentas pendientes")
     if df.empty:
-        st.success("¡No hay cuentas pendientes!")
+        st.success("¡No hay cuentas pendientes por cobrar!")
     else:
         st.dataframe(df.rename(columns={"id":"ID","folio":"Folio","cliente":"Cliente","fecha":"Fecha",
                       "total":"Total","abonado":"Abonado","saldo":"Saldo","estado":"Estado"}),
                      use_container_width=True, hide_index=True)
-        st.subheader("Registrar abono")
-        sale_id = st.selectbox("Venta / cliente", df.id.tolist(), format_func=lambda x: (
+        st.button("💵 Ir a registrar abono", use_container_width=True,
+                  on_click=lambda: st.session_state.update(bf_page="💵 Registrar abono"))
+    st.subheader("Historial de pagos")
+    hist = df_query("""SELECT p.paid_at AS Fecha, s.folio AS Folio, s.customer_name AS Cliente,
+                              p.amount AS Importe, p.method AS Método, p.notes AS Nota
+                       FROM payments p JOIN sales s ON s.id=p.sale_id ORDER BY p.id DESC LIMIT 100""")
+    if hist.empty:
+        st.info("Todavía no hay pagos registrados.")
+    else:
+        st.dataframe(hist, use_container_width=True, hide_index=True)
+
+elif page == "💵 Registrar abono":
+    df = df_query("""SELECT id, folio, customer_name AS cliente, sale_date AS fecha,
+                            total, paid_total AS abonado, balance AS saldo, status AS estado
+                     FROM sales WHERE balance > 0 ORDER BY sale_date""")
+    st.subheader("💵 Registrar un abono")
+    if df.empty:
+        st.info("No hay cuentas pendientes. Para registrar un abono, primero debe existir una venta con saldo pendiente.")
+    else:
+        sale_id = st.selectbox("Selecciona la venta o cliente", df.id.tolist(), format_func=lambda x: (
             f"{df.loc[df.id==x,'folio'].iloc[0]} · {df.loc[df.id==x,'cliente'].iloc[0]} · "
             f"Saldo ${float(df.loc[df.id==x,'saldo'].iloc[0]):,.2f}"
         ))
         current = money(df.loc[df.id==sale_id,"saldo"].iloc[0])
-        with st.form("payment_form"):
+        st.metric("Saldo pendiente", f"${float(current):,.2f}")
+        with st.form("payment_form", clear_on_submit=True):
             amount = st.number_input("Importe del abono ($)", min_value=0.01, max_value=float(current),
                                      value=min(100.0,float(current)), step=1.0, format="%.2f")
-            method = st.selectbox("Método", ["Efectivo","Transferencia","Tarjeta","Otro"])
+            method = st.selectbox("Método de pago", ["Efectivo","Transferencia","Tarjeta","Otro"])
             notes = st.text_input("Nota del abono (opcional)")
-            submit = st.form_submit_button("Guardar abono", use_container_width=True)
+            submit = st.form_submit_button("Guardar abono", use_container_width=True, type="primary")
         if submit:
             try:
                 amount_d = money(amount)
@@ -591,14 +616,6 @@ elif page == "💳 Cuentas por cobrar":
                 st.rerun()
             except Exception as e:
                 st.error(str(e))
-    st.subheader("Historial de pagos")
-    hist = df_query("""SELECT p.paid_at AS Fecha, s.folio AS Folio, s.customer_name AS Cliente,
-                              p.amount AS Importe, p.method AS Método, p.notes AS Nota
-                       FROM payments p JOIN sales s ON s.id=p.sale_id ORDER BY p.id DESC LIMIT 100""")
-    if hist.empty:
-        st.info("Todavía no hay pagos.")
-    else:
-        st.dataframe(hist, use_container_width=True, hide_index=True)
 
 # ---------------------------------------------------------------------
 # Reportes
