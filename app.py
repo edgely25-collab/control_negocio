@@ -5,7 +5,7 @@ from datetime import datetime
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
-    page_title="JL Studio Design - Control",
+    page_title="BeniFerch - Control",
     page_icon="🎨",
     layout="centered",
     initial_sidebar_state="expanded"
