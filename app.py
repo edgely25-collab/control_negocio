@@ -300,14 +300,14 @@ if low.empty:
             st.success("No hay productos debajo del stock mínimo.")
 else:
             st.dataframe(low, use_container_width=True, hide_index=True)
-    with b:
+with b:
         st.subheader("🧾 Ventas recientes")
         recent = df_query("""SELECT folio AS Folio, customer_name AS Cliente, sale_date AS Fecha,
                              total AS Total, balance AS Saldo, status AS Estado
                              FROM sales ORDER BY id DESC LIMIT 8""")
-        if recent.empty:
+if recent.empty:
             st.info("Todavía no hay ventas registradas.")
-        else:
+else:
             st.dataframe(recent, use_container_width=True, hide_index=True)
 
 # ---------------------------------------------------------------------
