@@ -260,8 +260,7 @@ PAGES = {
     "💎 Productos": ("Inventario", "Consulta existencias y precios"),
     "📥 Entrada de stock": ("Entrada de stock", "Registra mercancía recibida"),
     "👥 Clientes": ("Clientes", "Administra tus clientes"),
-    "💳 Cuentas por cobrar": ("Cuentas por cobrar", "Consulta los saldos pendientes"),
-    "💵 Registrar abono": ("Registrar abono", "Registra un pago de una cuenta pendiente"),
+    "💳 Cuentas por cobrar": ("Cuentas por cobrar y abonos", "Selecciona una cuenta y registra abonos"),
     "📊 Reportes": ("Reportes", "Ventas y movimientos de inventario"),
     "⚙️ Administración": ("Administración", "Edita productos y exporta datos"),
 }
@@ -284,8 +283,7 @@ if page == "✨ Inicio":
         ("💎 Productos", "💎", "Consultar inventario"),
         ("📥 Entrada de stock", "📦", "Agregar existencias"),
         ("👥 Clientes", "👥", "Directorio de clientes"),
-        ("💳 Cuentas por cobrar", "💳", "Ver saldos pendientes"),
-        ("💵 Registrar abono", "💵", "Capturar un pago o abono"),
+        ("💳 Cuentas por cobrar", "💳", "Selecciona una cuenta y aplica abonos"),
         ("📊 Reportes", "📊", "Consultar resultados"),
         ("⚙️ Administración", "⚙️", "Ajustes y exportaciones"),
     ]
@@ -417,6 +415,45 @@ elif page == "💎 Productos":
                      use_container_width=True, hide_index=True)
     else:
         st.info("Aún no hay productos registrados. Entra en «Nuevo producto» desde el inicio para agregar el primero.")
+
+    st.divider()
+    st.subheader("📦 Resumen de movimientos de inventario")
+    st.caption("El inventario inicial se calcula al comienzo del periodo seleccionado; las ventas se restan, las entradas se suman y se compara con la existencia actual.")
+    d1, d2 = st.columns(2)
+    today = date.today()
+    start_inv = d1.date_input("Desde", value=date(today.year, today.month, 1), key="inv_start")
+    end_inv = d2.date_input("Hasta", value=today, key="inv_end")
+    if start_inv > end_inv:
+        st.error("La fecha inicial no puede ser posterior a la fecha final.")
+    else:
+        inv_products = get_products(active_only=False)
+        inv_products = inv_products[inv_products["active"] == True] if not inv_products.empty else inv_products
+        mov = df_query("""SELECT product_id, movement_type, quantity FROM stock_movements
+                          WHERE DATE(created_at)>=:start AND DATE(created_at)<=:end""",
+                       {"start": start_inv.isoformat(), "end": end_inv.isoformat()})
+        rows = []
+        for _, pr in inv_products.iterrows():
+            pm = mov[mov["product_id"] == pr["id"]] if not mov.empty else pd.DataFrame()
+            sold = int(-pm.loc[pm["movement_type"] == "VENTA", "quantity"].sum()) if not pm.empty else 0
+            entries = int(pm.loc[pm["movement_type"] == "ENTRADA", "quantity"].sum()) if not pm.empty else 0
+            current = int(pr["stock"])
+            opening = current + sold - entries
+            rows.append({"Producto": pr["name"], "Inventario inicial": opening,
+                         "Menos ventas": sold, "Entradas de stock": entries,
+                         "Inventario final": current})
+        inv_df = pd.DataFrame(rows, columns=["Producto", "Inventario inicial", "Menos ventas", "Entradas de stock", "Inventario final"])
+        if inv_df.empty:
+            st.info("No hay productos para mostrar.")
+        else:
+            st.dataframe(inv_df, use_container_width=True, hide_index=True)
+            totals = {c: int(inv_df[c].sum()) for c in ["Inventario inicial", "Menos ventas", "Entradas de stock", "Inventario final"]}
+            m1,m2,m3,m4 = st.columns(4)
+            m1.metric("Inicial", totals["Inventario inicial"])
+            m2.metric("Ventas", f'-{totals["Menos ventas"]}')
+            m3.metric("Entradas", f'+{totals["Entradas de stock"]}')
+            m4.metric("Final", totals["Inventario final"])
+            st.download_button("Descargar resumen de inventario CSV", inv_df.to_csv(index=False).encode("utf-8-sig"),
+                               file_name=f"beniferch_inventario_{start_inv}_{end_inv}.csv", mime="text/csv")
 
 # Nueva venta
 # ---------------------------------------------------------------------
@@ -552,47 +589,27 @@ elif page == "👥 Clientes":
 # Cuentas por cobrar y abonos
 # ---------------------------------------------------------------------
 elif page == "💳 Cuentas por cobrar":
+    st.subheader("💳 Cuentas por cobrar y abonos")
+    st.caption("Selecciona una cuenta pendiente para revisar el saldo y registrar un abono. El pago se descuenta automáticamente del saldo.")
     df = df_query("""SELECT id, folio, customer_name AS cliente, sale_date AS fecha,
                             total, paid_total AS abonado, balance AS saldo, status AS estado
                      FROM sales WHERE balance > 0 ORDER BY sale_date""")
-    st.subheader("Cuentas pendientes")
     if df.empty:
         st.success("¡No hay cuentas pendientes por cobrar!")
     else:
         st.dataframe(df.rename(columns={"id":"ID","folio":"Folio","cliente":"Cliente","fecha":"Fecha",
                       "total":"Total","abonado":"Abonado","saldo":"Saldo","estado":"Estado"}),
                      use_container_width=True, hide_index=True)
-        st.button("💵 Ir a registrar abono", use_container_width=True,
-                  on_click=lambda: st.session_state.update(bf_page="💵 Registrar abono"))
-    st.subheader("Historial de pagos")
-    hist = df_query("""SELECT p.paid_at AS Fecha, s.folio AS Folio, s.customer_name AS Cliente,
-                              p.amount AS Importe, p.method AS Método, p.notes AS Nota
-                       FROM payments p JOIN sales s ON s.id=p.sale_id ORDER BY p.id DESC LIMIT 100""")
-    if hist.empty:
-        st.info("Todavía no hay pagos registrados.")
-    else:
-        st.dataframe(hist, use_container_width=True, hide_index=True)
-
-elif page == "💵 Registrar abono":
-    df = df_query("""SELECT id, folio, customer_name AS cliente, sale_date AS fecha,
-                            total, paid_total AS abonado, balance AS saldo, status AS estado
-                     FROM sales WHERE balance > 0 ORDER BY sale_date""")
-    st.subheader("💵 Registrar un abono")
-    if df.empty:
-        st.info("No hay cuentas pendientes. Para registrar un abono, primero debe existir una venta con saldo pendiente.")
-    else:
-        sale_id = st.selectbox("Selecciona la venta o cliente", df.id.tolist(), format_func=lambda x: (
-            f"{df.loc[df.id==x,'folio'].iloc[0]} · {df.loc[df.id==x,'cliente'].iloc[0]} · "
-            f"Saldo ${float(df.loc[df.id==x,'saldo'].iloc[0]):,.2f}"
-        ))
+        sale_id = st.selectbox("Selecciona la cuenta a la que aplicarás el abono", df.id.tolist(), key="combined_sale_select",
+            format_func=lambda x: (f"{df.loc[df.id==x,'folio'].iloc[0]} · {df.loc[df.id==x,'cliente'].iloc[0]} · Saldo ${float(df.loc[df.id==x,'saldo'].iloc[0]):,.2f}"))
         current = money(df.loc[df.id==sale_id,"saldo"].iloc[0])
-        st.metric("Saldo pendiente", f"${float(current):,.2f}")
-        with st.form("payment_form", clear_on_submit=True):
+        st.metric("Saldo pendiente de la cuenta seleccionada", f"${float(current):,.2f}")
+        with st.form("combined_payment_form", clear_on_submit=True):
             amount = st.number_input("Importe del abono ($)", min_value=0.01, max_value=float(current),
-                                     value=min(100.0,float(current)), step=1.0, format="%.2f")
+                                     value=float(current), step=1.0, format="%.2f")
             method = st.selectbox("Método de pago", ["Efectivo","Transferencia","Tarjeta","Otro"])
             notes = st.text_input("Nota del abono (opcional)")
-            submit = st.form_submit_button("Guardar abono", use_container_width=True, type="primary")
+            submit = st.form_submit_button("💵 Aplicar abono", use_container_width=True, type="primary")
         if submit:
             try:
                 amount_d = money(amount)
@@ -605,17 +622,23 @@ elif page == "💵 Registrar abono":
                     new_paid = money(sale["paid_total"]) + amount_d
                     new_balance = money(sale["total"]) - new_paid
                     status = "PAGADA" if new_balance == 0 else "ABONO PARCIAL"
-                    conn.execute(payments.insert().values(
-                        sale_id=int(sale_id), amount=amount_d, method=method,
-                        paid_at=datetime.now(), notes=notes.strip() or None
-                    ))
+                    conn.execute(payments.insert().values(sale_id=int(sale_id), amount=amount_d,
+                        method=method, paid_at=datetime.now(), notes=notes.strip() or None))
                     conn.execute(sales.update().where(sales.c.id == int(sale_id)).values(
-                        paid_total=new_paid, balance=new_balance, status=status
-                    ))
-                st.success("Abono registrado correctamente.")
+                        paid_total=new_paid, balance=new_balance, status=status))
+                st.success(f"Abono de ${float(amount_d):,.2f} aplicado. Nuevo saldo: ${float(new_balance):,.2f}.")
                 st.rerun()
             except Exception as e:
                 st.error(str(e))
+    st.divider()
+    st.subheader("🧾 Historial de pagos y abonos")
+    hist = df_query("""SELECT p.paid_at AS Fecha, s.folio AS Folio, s.customer_name AS Cliente,
+                              p.amount AS Importe, p.method AS Método, p.notes AS Nota
+                       FROM payments p JOIN sales s ON s.id=p.sale_id ORDER BY p.id DESC LIMIT 100""")
+    if hist.empty:
+        st.info("Todavía no hay pagos registrados.")
+    else:
+        st.dataframe(hist, use_container_width=True, hide_index=True)
 
 # ---------------------------------------------------------------------
 # Reportes
