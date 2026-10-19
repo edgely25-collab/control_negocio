@@ -351,67 +351,68 @@ if page == "✨ Inicio":
         else:
             st.dataframe(recent, use_container_width=True, hide_index=True)
 
-# ---------------------------------------------------------------------
-# Productos
-# ---------------------------------------------------------------------
 elif page == "💎 Productos":
-    tab1, tab2 = st.tabs(["Catálogo", "Agregar producto"])
-    with tab1:
-        query = st.text_input("Buscar producto por nombre, código o material")
-        df = get_products(active_only=False)
-        if not df.empty:
-            df = df[df["active"] == True]
-            if query:
-                mask = df.astype(str).apply(lambda col: col.str.contains(query, case=False, na=False)).any(axis=1)
-                df = df[mask]
-            view = df.rename(columns={
-                "sku":"Código","name":"Producto","category":"Categoría","material":"Material",
-                "cost_price":"Costo","sale_price":"Precio venta","stock":"Stock","min_stock":"Stock mínimo"
-            })
-            st.dataframe(view[["Código","Producto","Categoría","Material","Costo","Precio venta","Stock","Stock mínimo"]],
-                         use_container_width=True, hide_index=True)
+    st.subheader("➕ Registrar nuevo producto")
+    st.caption("Completa los datos y pulsa Guardar producto. Los campos están acomodados en vertical para facilitar el uso desde celular.")
+    with st.form("new_product", clear_on_submit=True):
+        name = st.text_input("Nombre del producto *", placeholder="Ej. Aretes corazón")
+        sku = st.text_input("Código / SKU (opcional)", placeholder="Ej. BF-001")
+        category = st.selectbox("Categoría", ["Aretes", "Collares", "Pulseras", "Anillos", "Relojes", "Acero inoxidable", "Laminado en oro", "Otros"])
+        material = st.text_input("Material o acabado", placeholder="Ej. Acero inoxidable dorado")
+        cost = st.number_input("Costo unitario ($)", min_value=0.0, step=1.0, format="%.2f")
+        price = st.number_input("Precio de venta ($)", min_value=0.0, step=1.0, format="%.2f")
+        stock = st.number_input("Stock inicial", min_value=0, step=1, value=0)
+        minimum = st.number_input("Avisar cuando llegue a", min_value=0, step=1, value=2)
+        desc = st.text_area("Descripción (opcional)")
+        submitted = st.form_submit_button("💾 Guardar producto", use_container_width=True, type="primary")
+    if submitted:
+        if not name.strip():
+            st.error("El nombre del producto es obligatorio.")
         else:
-            st.info("Aún no hay productos. Agrégalos en la pestaña correspondiente.")
-    with tab2:
-        with st.form("new_product", clear_on_submit=True):
-            col1,col2 = st.columns(2)
-            name = col1.text_input("Nombre del producto *")
-            sku = col2.text_input("Código / SKU (opcional)")
-            category = col1.selectbox("Categoría", ["Aretes","Collares","Pulseras","Anillos","Relojes","Acero inoxidable","Laminado en oro","Otros"])
-            material = col2.text_input("Material o acabado")
-            cost = col1.number_input("Costo unitario ($)", min_value=0.0, step=1.0, format="%.2f")
-            price = col2.number_input("Precio de venta ($)", min_value=0.0, step=1.0, format="%.2f")
-            stock = col1.number_input("Stock inicial", min_value=0, step=1, value=0)
-            minimum = col2.number_input("Avisar cuando llegue a", min_value=0, step=1, value=2)
-            desc = st.text_area("Descripción (opcional)")
-            submitted = st.form_submit_button("Guardar producto", use_container_width=True)
-        if submitted:
-            if not name.strip():
-                st.error("El nombre del producto es obligatorio.")
-            elif sku.strip() and not sku.strip():
-                st.error("Código inválido.")
-            else:
-                try:
-                    with engine.begin() as conn:
-                        pid = conn.execute(products.insert().values(
-                            sku=sku.strip() or None, name=name.strip(), category=category,
-                            material=material.strip() or None, description=desc.strip() or None,
-                            cost_price=money(cost), sale_price=money(price), stock=int(stock),
-                            min_stock=int(minimum), active=True, created_at=datetime.now()
-                        )).inserted_primary_key[0]
-                        if stock:
-                            conn.execute(stock_movements.insert().values(
-                                product_id=pid, movement_type="STOCK INICIAL", quantity=int(stock),
-                                stock_before=0, stock_after=int(stock), reason="Alta de producto",
-                                created_at=datetime.now()
-                            ))
-                    st.success("Producto guardado.")
-                    st.rerun()
-                except Exception as e:
-                    st.error("No se pudo guardar. Verifica que el código SKU no esté repetido.")
-                    st.caption(str(e))
+            try:
+                with engine.begin() as conn:
+                    if sku.strip():
+                        existing = conn.execute(select(products.c.id).where(products.c.sku == sku.strip())).first()
+                        if existing:
+                            st.error("Ese código SKU ya está registrado. Usa otro código o deja el campo vacío.")
+                            st.stop()
+                    result = conn.execute(products.insert().values(
+                        sku=sku.strip() or None, name=name.strip(), category=category,
+                        material=material.strip() or None, description=desc.strip() or None,
+                        cost_price=money(cost), sale_price=money(price), stock=int(stock),
+                        min_stock=int(minimum), active=True, created_at=datetime.now()
+                    ))
+                    pid = result.inserted_primary_key[0]
+                    if stock:
+                        conn.execute(stock_movements.insert().values(
+                            product_id=pid, movement_type="STOCK INICIAL", quantity=int(stock),
+                            stock_before=0, stock_after=int(stock), reason="Alta de producto",
+                            created_at=datetime.now()
+                        ))
+                st.success(f"Producto '{name.strip()}' guardado correctamente.")
+                st.rerun()
+            except Exception as e:
+                st.error("No se pudo guardar el producto. Revisa los datos y que el código SKU no esté repetido.")
+                st.caption(str(e))
 
-# ---------------------------------------------------------------------
+    st.divider()
+    st.subheader("💎 Inventario de productos")
+    query = st.text_input("Buscar producto por nombre, código o material", key="product_search")
+    df = get_products(active_only=False)
+    if not df.empty:
+        df = df[df["active"] == True]
+        if query:
+            mask = df.astype(str).apply(lambda col: col.str.contains(query, case=False, na=False)).any(axis=1)
+            df = df[mask]
+        view = df.rename(columns={
+            "sku":"Código", "name":"Producto", "category":"Categoría", "material":"Material",
+            "cost_price":"Costo", "sale_price":"Precio venta", "stock":"Stock", "min_stock":"Stock mínimo"
+        })
+        st.dataframe(view[["Código","Producto","Categoría","Material","Costo","Precio venta","Stock","Stock mínimo"]],
+                     use_container_width=True, hide_index=True)
+    else:
+        st.info("Aún no hay productos registrados. Usa el formulario de arriba para agregar el primero.")
+
 # Nueva venta
 # ---------------------------------------------------------------------
 elif page == "🛍️ Nueva venta":
