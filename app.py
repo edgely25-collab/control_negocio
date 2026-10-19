@@ -91,7 +91,7 @@ init_db()
 with st.sidebar:
     # Si tienes el link de una imagen o logo en la nube, puedes poner el URL aquí:
     st.image("https://img.icons8.com/color/96/design.png", width=70)
-    st.title("JL Studio Design")
+    st.title("BeniFerch")
     st.caption("Sistema de Gestión de Inventario y Adeudos")
     st.divider()
     
