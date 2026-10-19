@@ -18,7 +18,7 @@ st.set_page_config(
     page_title="BeniFerch | Gestión",
     page_icon="💎",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 GOLD = "#D4AF37"
@@ -48,6 +48,14 @@ st.markdown("""
 .stApp { background: #0d0d0f; color: #f5f5f5; }
 [data-testid="stHeader"] { background: rgba(13,13,15,.92); }
 [data-testid="stSidebar"] { background: #151517; border-right: 1px solid #34302a; }
+[data-testid="stSidebar"] { display: none; }
+.bf-hero { text-align:center; padding: 8px 0 18px; }
+.bf-hero img { width: min(100%, 620px); max-height: 260px; object-fit: contain; border-radius: 16px; }
+.bf-tile { background: linear-gradient(145deg,#1b1b1e,#111113); border: 1px solid #514426; border-radius: 16px; padding: 16px 10px; min-height: 110px; text-align:center; }
+.bf-tile-icon { font-size: 2rem; }
+.bf-tile-title { color:#f7e7a8; font-size:1rem; font-weight:750; margin-top:6px; }
+.bf-tile-caption { color:#bdb8ac; font-size:.78rem; margin-top:4px; }
+
 h1,h2,h3 { color: #f7f2e6; }
 p, label, .stCaption { color: #d4d4d4; }
 div[data-testid="stMetric"] {
@@ -243,24 +251,65 @@ def create_sale(customer_name, customer_id, cart, discount, payment_amount, paym
     return folio, total, balance
 
 # ---------------------------------------------------------------------
-# Navegación
+# Navegación móvil: menú de cuadros y botón de regreso
 # ---------------------------------------------------------------------
-with st.sidebar:
-    if os.path.exists("logo.png"):
-        st.image("logo.png", use_container_width=True)
-    elif os.path.exists("logo.jpg"):
-        st.image("logo.jpg", use_container_width=True)
-    st.markdown('<div class="bf-brand">BENIFERCH</div><div class="bf-sub">JOYERÍA & ACCESORIOS</div>', unsafe_allow_html=True)
-    st.divider()
-    page = st.radio("MENÚ PRINCIPAL", [
-        "✨ Inicio", "🛍️ Nueva venta", "💎 Productos", "📥 Entrada de stock",
-        "👥 Clientes", "💳 Cuentas por cobrar", "📊 Reportes", "⚙️ Administración"
-    ], label_visibility="collapsed")
-    st.divider()
-    if CLOUD_DB:
-        st.caption("● Base de datos alojada")
+PAGES = {
+    "✨ Inicio": ("Inicio", "Resumen del negocio"),
+    "🛍️ Nueva venta": ("Nueva venta", "Cobra productos y registra pagos"),
+    "💎 Productos": ("Inventario", "Consulta y agrega productos"),
+    "📥 Entrada de stock": ("Entrada de stock", "Registra mercancía recibida"),
+    "👥 Clientes": ("Clientes", "Administra tus clientes"),
+    "💳 Cuentas por cobrar": ("Cuentas por cobrar", "Consulta saldos y registra abonos"),
+    "📊 Reportes": ("Reportes", "Ventas y movimientos de inventario"),
+    "⚙️ Administración": ("Administración", "Edita productos y exporta datos"),
+}
+if "bf_page" not in st.session_state:
+    st.session_state.bf_page = "✨ Inicio"
+page = st.session_state.bf_page
+
+if page == "✨ Inicio":
+    logo_path = "logo.png" if os.path.exists("logo.png") else ("logo.jpg" if os.path.exists("logo.jpg") else ("logo.jpeg" if os.path.exists("logo.jpeg") else None))
+    if logo_path:
+        st.markdown('<div class="bf-hero">', unsafe_allow_html=True)
+        st.image(logo_path, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.warning("Modo local: configura PostgreSQL antes de usar en la nube.")
+        st.markdown('<div class="bf-hero"><div class="bf-brand" style="font-size:2rem">BENIFERCH</div><div class="bf-sub">JOYERÍA & ACCESORIOS</div></div>', unsafe_allow_html=True)
+    st.markdown("<div style='text-align:center;color:#c9c2b1;margin-bottom:18px'>¿Qué deseas hacer hoy?</div>", unsafe_allow_html=True)
+    tile_data = [
+        ("🛍️ Nueva venta", "🛍️", "Cobrar una venta"),
+        ("💎 Productos", "💎", "Ver o agregar inventario"),
+        ("📥 Entrada de stock", "📦", "Agregar existencias"),
+        ("👥 Clientes", "👥", "Directorio de clientes"),
+        ("💳 Cuentas por cobrar", "💳", "Saldos y abonos"),
+        ("📊 Reportes", "📊", "Consultar resultados"),
+        ("⚙️ Administración", "⚙️", "Ajustes y exportaciones"),
+    ]
+    # Cuadros fluidos: 2 columnas en celular y 3 en pantallas amplias.
+    cols_per_row = 2 if st.session_state.get("bf_mobile_layout", True) else 3
+    for i in range(0, len(tile_data), cols_per_row):
+        cols = st.columns(cols_per_row, gap="small")
+        for col, item in zip(cols, tile_data[i:i+cols_per_row]):
+            label, emoji, desc = item
+            with col:
+                st.markdown(f'<div class="bf-tile"><div class="bf-tile-icon">{emoji}</div><div class="bf-tile-title">{PAGES[label][0]}</div><div class="bf-tile-caption">{desc}</div></div>', unsafe_allow_html=True)
+                if st.button(f"Abrir {PAGES[label][0]}", key=f"tile_{label}", use_container_width=True):
+                    st.session_state.bf_page = label
+                    st.rerun()
+    st.divider()
+else:
+    back_col, title_col = st.columns([1, 5])
+    with back_col:
+        if st.button("← Inicio", use_container_width=True, key="back_home"):
+            st.session_state.bf_page = "✨ Inicio"
+            st.rerun()
+    with title_col:
+        st.markdown(f'<div class="bf-brand" style="font-size:1.25rem;padding-top:6px">BENIFERCH</div><div class="bf-sub">{PAGES[page][1]}</div>', unsafe_allow_html=True)
+
+if CLOUD_DB:
+    st.caption("● Base de datos alojada")
+else:
+    st.warning("Modo local: configura PostgreSQL antes de usar en la nube.")
 
 st.title(page)
 
