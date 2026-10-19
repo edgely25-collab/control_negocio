@@ -298,7 +298,7 @@ ORDER BY stock, name""")
 
 if low.empty:
             st.success("No hay productos debajo del stock mínimo.")
-        else:
+else:
             st.dataframe(low, use_container_width=True, hide_index=True)
     with b:
         st.subheader("🧾 Ventas recientes")
